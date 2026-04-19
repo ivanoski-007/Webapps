@@ -1,0 +1,681 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Silent Speaker</title>
+</head>
+<body>
+<script>
+const dash = String.fromCharCode(45);
+const minus = (a, b) => a + (~b + 1);
+
+const doc = document;
+const body = doc.body;
+
+const fontL = doc.createElement('link');
+fontL.rel = 'stylesheet';
+fontL.href = 'https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Press+Start+2P&display=swap';
+doc.head.appendChild(fontL);
+
+const lcdFont = doc.createElement('link');
+lcdFont.rel = 'stylesheet';
+lcdFont.href = 'https://unpkg.com/dseg@0.46.0/css/dseg.css';
+doc.head.appendChild(lcdFont);
+
+const metaChar = doc.createElement('meta');
+metaChar.setAttribute('charset', 'UTF' + dash + '8');
+doc.head.appendChild(metaChar);
+
+const metaView = doc.createElement('meta');
+metaView.setAttribute('name', 'viewport');
+metaView.setAttribute('content', 'width=device' + dash + 'width, initial' + dash + 'scale=1.0, maximum' + dash + 'scale=1.0, user' + dash + 'scalable=no');
+doc.head.appendChild(metaView);
+
+body.style.position = 'fixed';
+body.style.top = '0';
+body.style.bottom = '0';
+body.style.left = '0';
+body.style.right = '0';
+body.style.margin = '0';
+body.style.padding = '0';
+body.style.overflow = 'hidden';
+body.style.display = 'flex';
+body.style.flexDirection = 'column';
+body.style.backgroundColor = '#000000';
+body.style.color = '#ffffff';
+
+const fonts = [
+    { n: 'System', v: 'system' + dash + 'ui, sans' + dash + 'serif' },
+    { n: 'Serif', v: 'Georgia, serif' },
+    { n: 'Bold', v: '"Oswald", sans' + dash + 'serif' },
+    { n: 'LCD', v: '"DSEG14 Modern", monospace' },
+    { n: 'Pixel', v: '"Press Start 2P", system' + dash + 'ui' }
+];
+
+let cols = {
+    t: { h: 180, s: 100, l: 100 },
+    b: { h: 180, s: 100, l: 0 }
+};
+let curMode = 't';
+let curFontIdx = 0;
+let isMar = false;
+let textCaseMode = 0; // 0 = Original, 1 = UPPERCASE, 2 = Capitalize Words
+let uiHid = false;
+let posX = 0;
+let refSpan = null;
+
+const getColStr = (c) => 'hsl(' + c.h + ',' + c.s + '%,' + c.l + '%)';
+
+const disp = doc.createElement('div');
+disp.style.flex = '1';
+disp.style.display = 'flex';
+disp.style.alignItems = 'center';
+disp.style.justifyContent = 'center';
+disp.style.overflow = 'hidden';
+disp.style.position = 'relative';
+disp.style.width = '100%';
+disp.style.transition = 'all 0.3s ease';
+body.appendChild(disp);
+
+const txtWrap = doc.createElement('div');
+txtWrap.style.fontWeight = '900';
+txtWrap.style.textAlign = 'center';
+txtWrap.style.margin = '0';
+txtWrap.style.padding = '10px';
+txtWrap.style.boxSizing = 'border' + dash + 'box';
+txtWrap.style.lineHeight = '1.1';
+disp.appendChild(txtWrap);
+
+const togBtn = doc.createElement('button');
+togBtn.innerText = 'Hide Controls';
+togBtn.style.padding = '4px';
+togBtn.style.cursor = 'pointer';
+togBtn.style.border = 'none';
+togBtn.style.backgroundColor = '#34495e';
+togBtn.style.color = '#ffffff';
+togBtn.style.fontWeight = 'bold';
+togBtn.style.width = '100%';
+togBtn.style.textAlign = 'center';
+togBtn.style.fontSize = '12px';
+togBtn.style.zIndex = '20';
+body.appendChild(togBtn);
+
+const ctrl = doc.createElement('div');
+ctrl.style.display = 'flex';
+ctrl.style.flexDirection = 'column';
+ctrl.style.padding = '15px';
+ctrl.style.backgroundColor = '#222222';
+ctrl.style.overflow = 'hidden';
+ctrl.style.transition = 'all 0.3s ease';
+ctrl.style.maxHeight = '1000px';
+body.appendChild(ctrl);
+
+const topRow = doc.createElement('div');
+topRow.style.display = 'flex';
+topRow.style.flexWrap = 'wrap';
+topRow.style.gap = '10px';
+topRow.style.width = '100%';
+topRow.style.alignItems = 'center';
+ctrl.appendChild(topRow);
+
+const botRow = doc.createElement('div');
+botRow.style.display = 'flex';
+botRow.style.width = '100%';
+botRow.style.marginTop = '10px';
+ctrl.appendChild(botRow);
+
+const fLab = doc.createElement('label');
+fLab.style.color = '#ffffff';
+fLab.style.fontSize = '14px';
+fLab.style.display = 'flex';
+fLab.style.alignItems = 'center';
+fLab.style.gap = '5px';
+const fTxt = doc.createElement('span');
+fTxt.innerText = 'Font: ';
+fLab.appendChild(fTxt);
+const fSel = doc.createElement('select');
+fSel.style.padding = '4px';
+fSel.style.borderRadius = '4px';
+fSel.style.cursor = 'pointer';
+fonts.forEach((f, idx) => {
+    const opt = doc.createElement('option');
+    opt.value = idx;
+    opt.innerText = f.n;
+    fSel.appendChild(opt);
+});
+fLab.appendChild(fSel);
+topRow.appendChild(fLab);
+
+const createColBtn = (txt, mode) => {
+    const lab = doc.createElement('label');
+    lab.style.color = '#ffffff';
+    lab.style.fontSize = '14px';
+    lab.style.display = 'flex';
+    lab.style.alignItems = 'center';
+    lab.style.gap = '5px';
+    const spn = doc.createElement('span');
+    spn.innerText = txt;
+    lab.appendChild(spn);
+    const btn = doc.createElement('button');
+    btn.style.width = '24px';
+    btn.style.height = '24px';
+    btn.style.borderRadius = '4px';
+    btn.style.border = '2px solid #ffffff';
+    btn.style.cursor = 'pointer';
+    btn.addEventListener('click', () => openModal(mode));
+    lab.appendChild(btn);
+    topRow.appendChild(lab);
+    return btn;
+};
+
+const tColBtn = createColBtn('Text: ', 't');
+const bColBtn = createColBtn('BG: ', 'b');
+
+const marBtn = doc.createElement('button');
+marBtn.innerText = 'Marquee: OFF';
+marBtn.style.padding = '8px 12px';
+marBtn.style.cursor = 'pointer';
+marBtn.style.borderRadius = '4px';
+marBtn.style.border = 'none';
+marBtn.style.backgroundColor = '#7f8c8d';
+marBtn.style.color = '#ffffff';
+marBtn.style.fontWeight = 'bold';
+topRow.appendChild(marBtn);
+
+const spdLab = doc.createElement('label');
+spdLab.style.color = '#ffffff';
+spdLab.style.fontSize = '14px';
+spdLab.style.alignItems = 'center';
+spdLab.style.gap = '5px';
+spdLab.style.display = 'none';
+const spdTxt = doc.createElement('span');
+spdTxt.innerText = 'Speed: ';
+spdLab.appendChild(spdTxt);
+const spd = doc.createElement('input');
+spd.type = 'range';
+spd.min = '1';
+spd.max = '20';
+spd.value = '5';
+spd.style.cursor = 'pointer';
+spdLab.appendChild(spd);
+topRow.appendChild(spdLab);
+
+const gapLab = doc.createElement('label');
+gapLab.style.color = '#ffffff';
+gapLab.style.fontSize = '14px';
+gapLab.style.alignItems = 'center';
+gapLab.style.gap = '5px';
+gapLab.style.display = 'none';
+const gapTxt = doc.createElement('span');
+gapTxt.innerText = 'Gap: ';
+gapLab.appendChild(gapTxt);
+const gapInp = doc.createElement('input');
+gapInp.type = 'range';
+gapInp.min = '10';
+gapInp.max = '500';
+gapInp.value = '100';
+gapInp.style.cursor = 'pointer';
+gapLab.appendChild(gapInp);
+topRow.appendChild(gapLab);
+
+const mSzLab = doc.createElement('label');
+mSzLab.style.color = '#ffffff';
+mSzLab.style.fontSize = '14px';
+mSzLab.style.alignItems = 'center';
+mSzLab.style.gap = '5px';
+mSzLab.style.display = 'flex';
+const mSzTxt = doc.createElement('span');
+mSzTxt.innerText = 'Size: Auto';
+mSzTxt.style.width = '70px';
+mSzLab.appendChild(mSzTxt);
+const mSzInp = doc.createElement('input');
+mSzInp.type = 'range';
+mSzInp.min = '0';
+mSzInp.max = '100';
+mSzInp.value = '0';
+mSzInp.style.cursor = 'pointer';
+mSzLab.appendChild(mSzInp);
+topRow.appendChild(mSzLab);
+
+const marSzLab = doc.createElement('label');
+marSzLab.style.color = '#ffffff';
+marSzLab.style.fontSize = '14px';
+marSzLab.style.alignItems = 'center';
+marSzLab.style.gap = '5px';
+marSzLab.style.display = 'none';
+const marSzTxt = doc.createElement('span');
+marSzTxt.innerText = 'Size: 70%';
+marSzTxt.style.width = '70px';
+marSzLab.appendChild(marSzTxt);
+const marSzInp = doc.createElement('input');
+marSzInp.type = 'range';
+marSzInp.min = '1';
+marSzInp.max = '100';
+marSzInp.value = '70';
+marSzInp.style.cursor = 'pointer';
+marSzLab.appendChild(marSzInp);
+topRow.appendChild(marSzLab);
+
+const caseBtn = doc.createElement('button');
+caseBtn.innerText = 'Case: Orig';
+caseBtn.style.padding = '8px 12px';
+caseBtn.style.cursor = 'pointer';
+caseBtn.style.borderRadius = '4px';
+caseBtn.style.border = 'none';
+caseBtn.style.backgroundColor = '#f39c12';
+caseBtn.style.color = '#ffffff';
+caseBtn.style.fontWeight = 'bold';
+topRow.appendChild(caseBtn);
+
+const eraBtn = doc.createElement('button');
+eraBtn.innerText = 'Erase';
+eraBtn.style.padding = '8px 12px';
+eraBtn.style.cursor = 'pointer';
+eraBtn.style.borderRadius = '4px';
+eraBtn.style.border = 'none';
+eraBtn.style.backgroundColor = '#e74c3c';
+eraBtn.style.color = '#ffffff';
+eraBtn.style.fontWeight = 'bold';
+eraBtn.style.marginLeft = 'auto';
+topRow.appendChild(eraBtn);
+
+const inp = doc.createElement('textarea');
+inp.placeholder = 'Type here...';
+inp.value = 'Hello';
+inp.style.flex = '1';
+inp.style.width = '100%';
+inp.style.minHeight = '60px';
+inp.style.fontSize = '18px';
+inp.style.padding = '8px';
+inp.style.borderRadius = '4px';
+inp.style.border = 'none';
+inp.style.outline = 'none';
+inp.style.resize = 'none';
+botRow.appendChild(inp);
+
+const modalWrap = doc.createElement('div');
+modalWrap.style.position = 'fixed';
+modalWrap.style.top = '0';
+modalWrap.style.left = '0';
+modalWrap.style.width = '100vw';
+modalWrap.style.height = '100vh';
+modalWrap.style.backgroundColor = 'rgba(0,0,0,0.8)';
+modalWrap.style.display = 'none';
+modalWrap.style.alignItems = 'center';
+modalWrap.style.justifyContent = 'center';
+modalWrap.style.zIndex = '100';
+body.appendChild(modalWrap);
+
+const modalBox = doc.createElement('div');
+modalBox.style.backgroundColor = '#333333';
+modalBox.style.padding = '20px';
+modalBox.style.borderRadius = '8px';
+modalBox.style.width = '300px';
+modalBox.style.display = 'flex';
+modalBox.style.flexDirection = 'column';
+modalBox.style.gap = '15px';
+modalWrap.appendChild(modalBox);
+
+const mHead = doc.createElement('div');
+mHead.style.display = 'flex';
+mHead.style.justifyContent = 'space' + dash + 'between';
+mHead.style.alignItems = 'center';
+const mTitle = doc.createElement('h3');
+mTitle.style.margin = '0';
+mTitle.style.color = '#ffffff';
+const mClose = doc.createElement('button');
+mClose.innerText = 'X';
+mClose.style.background = 'none';
+mClose.style.border = 'none';
+mClose.style.color = '#ffffff';
+mClose.style.fontSize = '20px';
+mClose.style.fontWeight = 'bold';
+mClose.style.cursor = 'pointer';
+mHead.appendChild(mTitle);
+mHead.appendChild(mClose);
+modalBox.appendChild(mHead);
+
+const pGrid = doc.createElement('div');
+pGrid.style.display = 'flex';
+pGrid.style.flexWrap = 'wrap';
+pGrid.style.gap = '8px';
+const presetData = [
+    {h:0, s:100, l:50}, {h:60, s:100, l:50}, {h:120, s:100, l:50},
+    {h:180, s:100, l:50}, {h:240, s:100, l:50}, {h:300, s:100, l:50},
+    {h:180, s:100, l:100}, {h:180, s:100, l:0}
+];
+presetData.forEach(p => {
+    const pBtn = doc.createElement('button');
+    pBtn.style.width = '28px';
+    pBtn.style.height = '28px';
+    pBtn.style.borderRadius = '4px';
+    pBtn.style.border = '1px solid #aaaaaa';
+    pBtn.style.backgroundColor = 'hsl(' + p.h + ',' + p.s + '%,' + p.l + '%)';
+    pBtn.style.cursor = 'pointer';
+    pBtn.addEventListener('click', () => {
+        cols[curMode] = { h: p.h, s: p.s, l: p.l };
+        updateSliders();
+        updateAll();
+    });
+    pGrid.appendChild(pBtn);
+});
+modalBox.appendChild(pGrid);
+
+const createSlider = (labelTxt, min, max) => {
+    const wrap = doc.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.alignItems = 'center';
+    wrap.style.justifyContent = 'space' + dash + 'between';
+    wrap.style.color = '#ffffff';
+    const lab = doc.createElement('span');
+    lab.innerText = labelTxt;
+    lab.style.width = '70px';
+    lab.style.fontSize = '14px';
+    const rng = doc.createElement('input');
+    rng.type = 'range';
+    rng.min = min;
+    rng.max = max;
+    rng.style.flex = '1';
+    rng.style.marginLeft = '10px';
+    rng.style.cursor = 'pointer';
+    wrap.appendChild(lab);
+    wrap.appendChild(rng);
+    return { wrap, inp: rng };
+};
+
+const sTone = createSlider('Tone', 0, 360);
+const sSat = createSlider('Saturation', 0, 100);
+const sVal = createSlider('Value', 0, 100);
+
+modalBox.appendChild(sTone.wrap);
+modalBox.appendChild(sSat.wrap);
+modalBox.appendChild(sVal.wrap);
+
+const mFooter = doc.createElement('div');
+mFooter.style.display = 'flex';
+mFooter.style.justifyContent = 'flex' + dash + 'end';
+mFooter.style.marginTop = '10px';
+const mReset = doc.createElement('button');
+mReset.innerText = 'Reset';
+mReset.style.padding = '8px 16px';
+mReset.style.cursor = 'pointer';
+mReset.style.backgroundColor = '#e74c3c';
+mReset.style.color = '#ffffff';
+mReset.style.border = 'none';
+mReset.style.borderRadius = '4px';
+mReset.style.fontWeight = 'bold';
+mFooter.appendChild(mReset);
+modalBox.appendChild(mFooter);
+
+const updateSliders = () => {
+    sTone.inp.value = cols[curMode].h;
+    sSat.inp.value = cols[curMode].s;
+    sVal.inp.value = cols[curMode].l;
+};
+
+const openModal = (mode) => {
+    curMode = mode;
+    mTitle.innerText = mode === 't' ? 'Text Color' : 'Background Color';
+    updateSliders();
+    modalWrap.style.display = 'flex';
+};
+
+mClose.addEventListener('click', () => {
+    modalWrap.style.display = 'none';
+});
+
+const onSlider = () => {
+    cols[curMode] = {
+        h: parseInt(sTone.inp.value),
+        s: parseInt(sSat.inp.value),
+        l: parseInt(sVal.inp.value)
+    };
+    updateAll();
+};
+
+sTone.inp.addEventListener('input', onSlider);
+sSat.inp.addEventListener('input', onSlider);
+sVal.inp.addEventListener('input', onSlider);
+
+mReset.addEventListener('click', () => {
+    cols[curMode] = { h: 180, s: 100, l: curMode === 't' ? 100 : 0 };
+    updateSliders();
+    updateAll();
+});
+
+const saveData = () => {
+    const obj = {
+        t: inp.value,
+        cT: cols.t,
+        cB: cols.b,
+        m: isMar,
+        s: spd.value,
+        g: gapInp.value,
+        f: curFontIdx,
+        msz: mSzInp.value,
+        marsz: marSzInp.value,
+        tc: textCaseMode
+    };
+    localStorage.setItem('silentData8', JSON.stringify(obj));
+};
+
+const loadData = () => {
+    try {
+        const str = localStorage.getItem('silentData8');
+        if (str) {
+            const obj = JSON.parse(str);
+            if (obj.t !== undefined) inp.value = obj.t;
+            if (obj.cT !== undefined) cols.t = obj.cT;
+            if (obj.cB !== undefined) cols.b = obj.cB;
+            if (obj.m !== undefined) isMar = obj.m;
+            if (obj.s !== undefined) spd.value = obj.s;
+            if (obj.g !== undefined) gapInp.value = obj.g;
+            if (obj.f !== undefined) {
+                curFontIdx = obj.f;
+                fSel.value = curFontIdx;
+            }
+            if (obj.msz !== undefined) mSzInp.value = obj.msz;
+            if (obj.marsz !== undefined) marSzInp.value = obj.marsz;
+            if (obj.tc !== undefined) textCaseMode = obj.tc;
+        }
+    } catch (e) {}
+};
+
+const scaleText = () => {
+    if (isMar) return;
+    let minS = 10;
+    let maxS = 1000;
+    let best = 10;
+
+    txtWrap.style.whiteSpace = 'pre' + dash + 'wrap';
+    txtWrap.style.width = '100%';
+    txtWrap.style.transform = 'none';
+
+    while (minS <= maxS) {
+        let mid = Math.floor((minS + maxS) / 2);
+        txtWrap.style.fontSize = mid + 'px';
+
+        if (txtWrap.scrollHeight <= disp.clientHeight && txtWrap.scrollWidth <= disp.clientWidth) {
+            best = mid;
+            minS = mid + 1;
+        } else {
+            maxS = minus(mid, 1);
+        }
+    }
+    txtWrap.style.fontSize = best + 'px';
+};
+
+const updateLabelText = () => {
+    mSzTxt.innerText = mSzInp.value === '0' ? 'Size: Auto' : 'Size: ' + mSzInp.value + '%';
+    marSzTxt.innerText = 'Size: ' + marSzInp.value + '%';
+    
+    const caseLabels = ['Case: Orig', 'Case: UPPER', 'Case: Caps'];
+    caseBtn.innerText = caseLabels[textCaseMode];
+};
+
+const getFormattedText = (txt) => {
+    if (textCaseMode === 1) {
+        return txt.toUpperCase();
+    } else if (textCaseMode === 2) {
+        // Capitalizes the first non-whitespace character after the start or a space
+        return txt.replace(/(?:^|\s)\S/g, char => char.toUpperCase());
+    }
+    return txt;
+};
+
+const updateAll = () => {
+    body.style.backgroundColor = getColStr(cols.b);
+    txtWrap.style.color = getColStr(cols.t);
+    tColBtn.style.backgroundColor = getColStr(cols.t);
+    bColBtn.style.backgroundColor = getColStr(cols.b);
+    txtWrap.style.fontFamily = fonts[curFontIdx].v;
+
+    if (fonts[curFontIdx].n === 'LCD') {
+        txtWrap.style.fontStyle = 'italic';
+    } else {
+        txtWrap.style.fontStyle = 'normal';
+    }
+
+    updateLabelText();
+    
+    let displayText = getFormattedText(inp.value);
+
+    if (isMar) {
+        spdLab.style.display = 'flex';
+        gapLab.style.display = 'flex';
+        marSzLab.style.display = 'flex';
+        mSzLab.style.display = 'none';
+        marBtn.innerText = 'Marquee: ON';
+        marBtn.style.backgroundColor = '#3498db';
+
+        txtWrap.innerHTML = '';
+        txtWrap.style.whiteSpace = 'nowrap';
+        txtWrap.style.width = 'max' + dash + 'content';
+        txtWrap.style.display = 'flex';
+        txtWrap.style.flexDirection = 'row';
+        txtWrap.style.fontSize = Math.floor(disp.clientHeight * (parseInt(marSzInp.value) / 100)) + 'px';
+
+        if (displayText !== '') {
+            let sp1 = doc.createElement('span');
+            sp1.innerText = displayText;
+            sp1.style.paddingRight = gapInp.value + 'px';
+            txtWrap.appendChild(sp1);
+            refSpan = sp1;
+
+            let unitW = sp1.offsetWidth;
+            if (unitW > 0) {
+                let copies = Math.ceil(disp.clientWidth / unitW) + 2;
+                for (let i = 1; i < copies; i += 1) {
+                    let spNext = doc.createElement('span');
+                    spNext.innerText = displayText;
+                    spNext.style.paddingRight = gapInp.value + 'px';
+                    txtWrap.appendChild(spNext);
+                }
+            }
+        } else {
+            refSpan = null;
+        }
+    } else {
+        spdLab.style.display = 'none';
+        gapLab.style.display = 'none';
+        marSzLab.style.display = 'none';
+        mSzLab.style.display = 'flex';
+        marBtn.innerText = 'Marquee: OFF';
+        marBtn.style.backgroundColor = '#7f8c8d';
+
+        txtWrap.innerHTML = '';
+        txtWrap.style.display = 'block';
+        txtWrap.style.transform = 'none';
+        txtWrap.innerText = displayText;
+        refSpan = null;
+
+        if (mSzInp.value === '0') {
+            scaleText();
+        } else {
+            txtWrap.style.whiteSpace = 'pre' + dash + 'wrap';
+            txtWrap.style.width = '100%';
+            txtWrap.style.fontSize = Math.floor(disp.clientHeight * (parseInt(mSzInp.value) / 100)) + 'px';
+        }
+    }
+    saveData();
+};
+
+inp.addEventListener('input', updateAll);
+eraBtn.addEventListener('click', () => { inp.value = ''; updateAll(); });
+spd.addEventListener('input', updateAll);
+gapInp.addEventListener('input', updateAll);
+
+mSzInp.addEventListener('input', () => {
+    if (mSzInp.value !== '0') {
+        marSzInp.value = mSzInp.value;
+    }
+    updateAll();
+});
+
+marSzInp.addEventListener('input', updateAll);
+
+fSel.addEventListener('change', () => {
+    curFontIdx = fSel.value;
+    updateAll();
+});
+
+marBtn.addEventListener('click', () => {
+    isMar = !isMar;
+    posX = 0;
+    updateAll();
+});
+
+caseBtn.addEventListener('click', () => {
+    textCaseMode = (textCaseMode + 1) % 3;
+    updateAll();
+});
+
+togBtn.addEventListener('click', () => {
+    uiHid = !uiHid;
+    if (uiHid) {
+        ctrl.style.maxHeight = '0px';
+        ctrl.style.padding = '0px';
+        togBtn.innerText = 'Show Controls';
+    } else {
+        ctrl.style.maxHeight = '1000px';
+        ctrl.style.padding = '15px';
+        togBtn.innerText = 'Hide Controls';
+    }
+});
+
+const obs = new ResizeObserver(() => {
+    if (!isMar) {
+        if (mSzInp.value === '0') {
+            scaleText();
+        } else {
+            updateAll();
+        }
+    } else {
+        updateAll();
+    }
+});
+obs.observe(disp);
+
+const loop = () => {
+    if (isMar && refSpan) {
+        let speed = parseInt(spd.value) * 0.35;
+        posX = minus(posX, speed);
+
+        let unitW = refSpan.offsetWidth;
+        if (unitW > 0) {
+            let bound = minus(0, unitW);
+            if (posX <= bound) {
+                posX = posX + unitW;
+            }
+            txtWrap.style.transform = 'translate3d(' + posX + 'px, 0, 0)';
+        }
+    }
+    requestAnimationFrame(loop);
+};
+
+loadData();
+updateAll();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
